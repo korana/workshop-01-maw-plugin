@@ -90,6 +90,15 @@ h2 {
   padding: .15rem .55rem; border-radius: 12px;
 }
 
+/* ── Live bar ── */
+.live-bar {
+  text-align: center; color: var(--green); font-size: .72rem;
+  margin: -.5rem 0 1.5rem;
+}
+.live-bar.stale { color: var(--dim); }
+.live-bar .dot { color: var(--green); }
+.live-bar.stale .dot { color: var(--dim); }
+
 /* ── Stats row ── */
 .stats { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
 .stat {
@@ -138,6 +147,8 @@ a:hover { text-decoration: underline; }
     <div class="stat"><div class="stat-val" id="stat-hermes">—</div><div class="stat-label">hermes events</div></div>
     <div class="stat"><div class="stat-val" id="stat-total">—</div><div class="stat-label">total events</div></div>
   </div>
+
+  <div class="live-bar" id="live-bar">● live · <span id="updated">connecting…</span></div>
 
   <!-- Hermes-only section -->
   <div class="hermes-section">
@@ -232,9 +243,11 @@ function escapeHtml(s) {
 async function load() {
   const hermesEl  = document.getElementById("hermes-events");
   const allEl     = document.getElementById("all-events");
+  const liveBar   = document.getElementById("live-bar");
+  const updatedEl = document.getElementById("updated");
 
   try {
-    const resp = await fetch(API);
+    const resp = await fetch(API, { cache: "no-store" });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const json = await resp.json();
     const events = json.events || [];
@@ -257,13 +270,30 @@ async function load() {
       ? othersEvents.slice(0, 50).map(e => renderEvent(e, false)).join("")
       : '<div class="empty">No other events yet</div>';
 
+    lastUpdate = Date.now();
+    liveBar.classList.remove("stale");
+    updatedEl.textContent = "updated just now";
   } catch(err) {
-    hermesEl.innerHTML = `<div class="error">Failed to load Chronicle: ${escapeHtml(err.message)}</div>`;
-    allEl.innerHTML    = hermesEl.innerHTML;
+    liveBar.classList.add("stale");
+    if (hermesEl.innerHTML.includes("Loading")) {
+      hermesEl.innerHTML = `<div class="error">Failed to load Chronicle: ${escapeHtml(err.message)}</div>`;
+      allEl.innerHTML    = hermesEl.innerHTML;
+    }
+    updatedEl.textContent = `error: ${escapeHtml(err.message)}`;
   }
 }
 
+let lastUpdate = 0;
+function tickUpdated() {
+  const el = document.getElementById("updated");
+  if (!lastUpdate) return;
+  const s = Math.floor((Date.now() - lastUpdate) / 1000);
+  el.textContent = s < 60 ? `updated ${s}s ago` : `updated ${Math.floor(s/60)}m ago`;
+}
+
 load();
+setInterval(load, 30000);   // ponytail: poll every 30s; Chronicle is low-volume
+setInterval(tickUpdated, 1000);
 </script>
 </body>
 </html>
